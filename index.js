@@ -26,8 +26,20 @@ async function run() {
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email });
-
       res.send({ role: user?.role || "user" });
+    });
+
+    // get all users
+    app.get("/users", async (req, res) => {
+      const search = req.query.search || "";
+      const query = {
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ],
+      };
+      const users = await usersCollection.find(query).toArray();
+      res.send(users);
     });
 
     app.post("/users", async (req, res) => {
@@ -41,6 +53,32 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
+
+    const express = require("express");
+    const router = express.Router();
+    const { ObjectId } = require("mongodb");
+
+    app.patch("/users/role/:id", async (req, res) => {
+      const userId = req.params.id;
+      const { role } = req.body;
+
+      if (!role) {
+        return res.status(400).json({ error: "Role is required" });
+      }
+
+      try {
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { role } }
+        );
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating role:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    module.exports = router;
 
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
@@ -57,7 +95,7 @@ async function run() {
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("this is daily market bd server");
 });
 
 app.listen(port, () => {
