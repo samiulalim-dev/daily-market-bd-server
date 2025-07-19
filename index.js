@@ -44,12 +44,23 @@ async function run() {
   try {
     const database = client.db("dailyMarketDB");
     const usersCollection = database.collection("users");
+    const productsCollection = database.collection("products");
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
-      const user = await userCollection.findOne({ email });
+      const user = await usersCollection.findOne({ email });
 
       if (user?.role !== "admin") {
+        return res.status(401).send({ error: true, message: "Forbidden" });
+      }
+
+      next();
+    };
+    const verifyVendor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await usersCollection.findOne({ email });
+
+      if (user?.role !== "vendor") {
         return res.status(401).send({ error: true, message: "Forbidden" });
       }
 
@@ -107,6 +118,43 @@ async function run() {
         } catch (error) {
           console.error("Error updating role:", error);
           res.status(500).json({ error: "Internal Server Error" });
+        }
+      }
+    );
+
+    // add products
+
+    app.get(
+      "/vendor/products",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        const email = req.query.email;
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+        const products = await productsCollection
+          .find({ vendorEmail: email })
+          .sort({ date: -1 })
+          .toArray();
+
+        res.send(products);
+      }
+    );
+
+    app.post(
+      "/products",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        try {
+          const product = req.body;
+          const result = await productsCollection.insertOne(product);
+          res.send(result);
+        } catch (err) {
+          res
+            .status(500)
+            .send({ message: "Failed to add product", error: err.message });
         }
       }
     );
