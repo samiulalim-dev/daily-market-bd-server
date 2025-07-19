@@ -3,7 +3,7 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const admin = require("firebase-admin");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 const decodedKey = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString();
 const serviceAccount = JSON.parse(decodedKey);
@@ -122,7 +122,7 @@ async function run() {
       }
     );
 
-    // add products
+    //  productsCollection
 
     app.get(
       "/vendor/products",
@@ -158,6 +158,14 @@ async function run() {
         }
       }
     );
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const result = await productsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
 
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
