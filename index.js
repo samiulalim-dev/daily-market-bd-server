@@ -215,20 +215,32 @@ async function run() {
       }
     );
 
-    // PATCH: update advertisement by id
-    app.patch("/advertisements/:id", async (req, res) => {
+    //  update advertisement by id
+    app.patch(
+      "/advertisements/:id",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        const id = req.params.id;
+        const updatedData = req.body;
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: updatedData,
+        };
+
+        const result = await advertisementsCollection.updateOne(
+          filter,
+          updateDoc
+        );
+        res.send(result);
+      }
+    );
+    //  delete advertisement by id
+    app.delete("/advertisements/:id", async (req, res) => {
       const id = req.params.id;
-      const updatedData = req.body;
-
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: updatedData,
-      };
-
-      const result = await advertisementsCollection.updateOne(
-        filter,
-        updateDoc
-      );
+      const query = { _id: new ObjectId(id) };
+      const result = await advertisementsCollection.deleteOne(query);
       res.send(result);
     });
 
