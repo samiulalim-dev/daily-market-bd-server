@@ -215,6 +215,23 @@ async function run() {
       }
     );
 
+    // PATCH: update advertisement by id
+    app.patch("/advertisements/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: updatedData,
+      };
+
+      const result = await advertisementsCollection.updateOne(
+        filter,
+        updateDoc
+      );
+      res.send(result);
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
