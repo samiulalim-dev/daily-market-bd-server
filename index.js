@@ -15,7 +15,6 @@ app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.fe99gj2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -45,6 +44,7 @@ async function run() {
     const database = client.db("dailyMarketDB");
     const usersCollection = database.collection("users");
     const productsCollection = database.collection("products");
+    const advertisementsCollection = database.collection("advertisements");
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -68,7 +68,7 @@ async function run() {
     };
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
-      const user = await usersCollection.findOne({ email });
+      const user = await usersCollection.findOne({ email: email });
       res.send({ role: user?.role || "user" });
     });
 
@@ -158,25 +158,62 @@ async function run() {
         }
       }
     );
-    app.patch("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const updatedData = req.body;
+    app.patch(
+      "/products/:id",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        const id = req.params.id;
+        const updatedData = req.body;
 
-      const result = await productsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedData }
-      );
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+        res.send(result);
+      }
+    );
+
+    app.delete(
+      "/products/:id",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        const id = req.params.id;
+        console.log(id);
+        const result = await productsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      }
+    );
+
+    // advertisementsCollection
+
+    app.get("/advertisements", async (req, res) => {
+      const email = req.query.vendorEmails;
+      const result = await advertisementsCollection
+        .find({ vendorEmail: email })
+        .toArray();
       res.send(result);
     });
 
-    app.delete("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      console.log(id);
-      const result = await productsCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-      res.send(result);
-    });
+    app.post(
+      "/advertisements",
+      verifyFirebaseToken,
+      verifyVendor,
+      async (req, res) => {
+        const adData = req.body;
+        try {
+          const result = await advertisementsCollection.insertOne(adData);
+          res.send(result);
+        } catch (err) {
+          res
+            .status(500)
+            .send({ message: "Failed to add advertisement", error: err });
+        }
+      }
+    );
 
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
