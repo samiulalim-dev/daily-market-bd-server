@@ -341,6 +341,28 @@ async function run() {
       res.send(result);
     });
 
+    // approved advertisements
+
+    app.get("/approved/advertisements", async (req, res) => {
+      const result = await advertisementsCollection
+        .find({
+          status: "approved",
+        })
+        .toArray();
+      res.send(result);
+    });
+
+    // get all approved products
+
+    app.get("/products/public", async (req, res) => {
+      const products = await productsCollection
+        .find({
+          status: "approved",
+        })
+        .toArray();
+      res.send(products);
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
