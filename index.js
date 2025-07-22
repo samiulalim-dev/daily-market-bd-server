@@ -252,7 +252,7 @@ async function run() {
       async (req, res) => {
         const result = await productsCollection
           .find()
-          .sort({ createdAt: -1 })
+          .sort({ date: -1 })
           .toArray();
         res.send(result);
       }
@@ -260,30 +260,82 @@ async function run() {
 
     // handle approved
 
-    app.patch("/admin/products/approve/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await productsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: "approved", rejectedReason: "" } }
-      );
-      res.send(result);
-    });
+    app.patch(
+      "/admin/products/approve/:id",
+      verifyFirebaseToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "approved", rejectedReason: "" } }
+        );
+        res.send(result);
+      }
+    );
 
     // Reject a product with reason
-    app.patch("/admin/products/reject/:id", async (req, res) => {
+    app.patch(
+      "/admin/products/reject/:id",
+      verifyFirebaseToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const { reason } = req.body;
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "rejected", rejectedReason: reason } }
+        );
+        res.send(result);
+      }
+    );
+
+    // Delete a product
+    app.delete(
+      "/admin/products/:id",
+      verifyFirebaseToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const result = await productsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      }
+    );
+
+    // admin all advertisements
+    app.get(
+      "/admin/advertisements",
+      verifyFirebaseToken,
+      verifyAdmin,
+      async (req, res) => {
+        const result = await advertisementsCollection
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      }
+    );
+    // Update Advertisement Status
+    app.patch("/admin/advertisements/:id", async (req, res) => {
       const id = req.params.id;
-      const { reason } = req.body;
-      const result = await productsCollection.updateOne(
+      const { status } = req.body;
+      // console.log(id, status);
+      const result = await advertisementsCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { status: "rejected", rejectedReason: reason } }
+        {
+          $set: { status },
+        }
       );
       res.send(result);
     });
 
-    // Delete a product
-    app.delete("/admin/products/:id", async (req, res) => {
+    // delete advertisements
+
+    app.delete("/admin/advertisements/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await productsCollection.deleteOne({
+      const result = await advertisementsCollection.deleteOne({
         _id: new ObjectId(id),
       });
       res.send(result);
