@@ -46,6 +46,7 @@ async function run() {
     const productsCollection = database.collection("products");
     const advertisementsCollection = database.collection("advertisements");
     const reviewsCollection = database.collection("reviews");
+    const watchlistCollection = database.collection("watchlist");
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -660,6 +661,72 @@ async function run() {
         res.send(result);
       } catch (error) {
         res.status(500).json({ message: "Failed to post review", error });
+      }
+    });
+
+    // watchList collection CRUD
+
+    app.post("/watchlist", verifyFirebaseToken, async (req, res) => {
+      try {
+        const watchItem = req.body;
+
+        // Prevent duplicate entry
+        const existing = await watchlistCollection.findOne({
+          userEmail: watchItem.userEmail,
+          productId: watchItem.productId,
+          productName: watchItem.itemName,
+          marketName: watchItem.marketName,
+        });
+
+        if (existing) {
+          return res.status(409).json({ message: "Already in watchlist" });
+        }
+
+        const result = await watchlistCollection.insertOne(watchItem);
+        res.status(201).json(result);
+      } catch (err) {
+        res.status(500).json({ message: "Failed to add to watchlist" });
+      }
+    });
+
+    app.get("/watchlist/:email", verifyFirebaseToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+        console.log(email);
+        if (req.decoded.email !== email) {
+          return res.status(403).json({ message: "Forbidden access" });
+        }
+
+        const items = await watchlistCollection
+          .find({ userEmail: email })
+          .toArray();
+        res.send(items);
+      } catch (err) {
+        res.status(500).json({ message: "Failed to fetch watchlist" });
+      }
+    });
+
+    app.delete("/watchlist/:id", verifyFirebaseToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const item = await watchlistCollection.findOne({
+          productId: id,
+        });
+
+        if (!item) {
+          return res.status(404).json({ message: "Item not found" });
+        }
+
+        if (item.userEmail !== req.decoded.email) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const result = await watchlistCollection.deleteOne({
+          productId: id,
+        });
+        res.send(result);
+      } catch (err) {
+        res.status(500).json({ message: "Failed to remove item" });
       }
     });
 
