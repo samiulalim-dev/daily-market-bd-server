@@ -3,6 +3,7 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 const admin = require("firebase-admin");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 const decodedKey = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString();
@@ -47,6 +48,7 @@ async function run() {
     const advertisementsCollection = database.collection("advertisements");
     const reviewsCollection = database.collection("reviews");
     const watchlistCollection = database.collection("watchlist");
+    const buyCollection = database.collection("buyProducts");
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -425,6 +427,8 @@ async function run() {
       }
     });
 
+    // Comparison charData for viewDetails
+
     // app.get("/price-history/:id", async (req, res) => {
     //   try {
     //     const id = req.params.id;
@@ -727,6 +731,46 @@ async function run() {
         res.send(result);
       } catch (err) {
         res.status(500).json({ message: "Failed to remove item" });
+      }
+    });
+
+    // payment related work
+
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        const { price } = req.body;
+
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: parseInt(price * 100), // convert to cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Payment intent creation failed" });
+      }
+    });
+
+    app.post("/buy-product", async (req, res) => {
+      try {
+        const purchase = req.body;
+
+        if (
+          !purchase.userEmail ||
+          !purchase.productId ||
+          !purchase.transactionId
+        ) {
+          return res.status(400).json({ message: "Missing fields" });
+        }
+
+        const result = await buyCollection.insertOne(purchase);
+        res.send({ insertedId: result.insertedId });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to record purchase" });
       }
     });
 
