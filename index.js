@@ -45,6 +45,7 @@ async function run() {
     const usersCollection = database.collection("users");
     const productsCollection = database.collection("products");
     const advertisementsCollection = database.collection("advertisements");
+    const reviewsCollection = database.collection("reviews");
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -355,12 +356,311 @@ async function run() {
     // get all approved products
 
     app.get("/products/public", async (req, res) => {
-      const products = await productsCollection
-        .find({
+      try {
+        const { sort, startDate, endDate } = req.query;
+
+        // Step 1: Build match query
+        const matchQuery = {
           status: "approved",
-        })
-        .toArray();
-      res.send(products);
+        };
+
+        if (startDate && endDate) {
+          matchQuery.date = {
+            $gte: startDate,
+            $lte: endDate,
+          };
+        }
+
+        // Step 2: Determine sort option
+        let sortStage = { date: -1 };
+
+        if (sort === "asc") {
+          sortStage = { priceNumber: 1 };
+        } else if (sort === "desc") {
+          sortStage = { priceNumber: -1 };
+        }
+
+        // Step 3: Aggregate query with $toDouble for pricePerUnit
+        const products = await productsCollection
+          .aggregate([
+            {
+              $match: matchQuery,
+            },
+            {
+              $addFields: {
+                priceNumber: { $toDouble: "$pricePerUnit" },
+              },
+            },
+            {
+              $sort: sortStage,
+            },
+          ])
+          .toArray();
+
+        res.send(products);
+      } catch (error) {
+        res.status(500).json({ message: "Server Error", error: error.message });
+      }
+    });
+
+    // get a single products
+
+    app.get("/products/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const product = await productsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!product) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        res.send(product);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Something went wrong", error: error.message });
+      }
+    });
+
+    // app.get("/price-history/:id", async (req, res) => {
+    //   try {
+    //     const id = req.params.id;
+    //     const compareDate = req.query.compareDate;
+
+    //     if (!compareDate) {
+    //       return res.status(400).json({ message: "Compare date is required" });
+    //     }
+
+    //     const currentProduct = await productsCollection.findOne({
+    //       _id: new ObjectId(id),
+    //     });
+
+    //     if (!currentProduct) {
+    //       return res.status(404).json({ message: "Product not found" });
+    //     }
+
+    //     const previousProduct = await productsCollection.findOne({
+    //       marketName: currentProduct.marketName,
+    //       date: compareDate,
+    //       "products.name": { $in: currentProduct.map((p) => p.name) },
+    //     });
+
+    //     if (!previousProduct) {
+    //       return res
+    //         .status(404)
+    //         .json({ message: "Previous product data not found" });
+    //     }
+
+    //     const comparison = currentProduct.map((currItem) => {
+    //       const prevItem = previousProduct.find(
+    //         (p) => p.name === currItem.name
+    //       );
+    //       const previousPrice = prevItem ? prevItem.pricePerUnit : 0;
+    //       return {
+    //         name: currItem.itemName,
+    //         current: currItem.pricePerUnit,
+    //         previous: previousPrice,
+    //         difference: currItem.pricePerUnit - previousPrice,
+    //       };
+    //     });
+
+    //     res.send(comparison);
+    //   } catch (error) {
+    //     console.error("Error fetching price history:", error);
+    //     res.status(500).json({ message: "Internal Server Error" });
+    //   }
+    // });
+
+    // app.get("/price-history/:id", async (req, res) => {
+    //   try {
+    //     const id = req.params.id;
+    //     const compareDate = req.query.compareDate;
+
+    //     if (!compareDate) {
+    //       return res.status(400).json({ message: "Compare date is required" });
+    //     }
+
+    //     // Get current product document by ID
+    //     const currentProduct = await productsCollection.findOne({
+    //       _id: new ObjectId(id),
+    //     });
+
+    //     if (!currentProduct) {
+    //       return res.status(404).json({ message: "Product not found" });
+    //     }
+
+    //     // Get previous product document by market name and compare date
+    //     const previousProduct = await productsCollection.findOne({
+    //       marketName: currentProduct.marketName,
+    //       date: compareDate,
+    //     });
+
+    //     if (!previousProduct) {
+    //       return res
+    //         .status(404)
+    //         .json({ message: "Previous product data not found" });
+    //     }
+
+    //     // Compare each product by name
+    //     const comparison = currentProduct.products.map((currItem) => {
+    //       const prevItem = previousProduct.products.find(
+    //         (p) => p.name === currItem.name
+    //       );
+
+    //       const currentPrice = parseFloat(currItem.pricePerUnit) || 0;
+    //       const previousPrice = parseFloat(prevItem?.pricePerUnit) || 0;
+
+    //       return [
+    //         {
+    //           name: currItem.name,
+    //           current: currentPrice,
+    //           previous: previousPrice,
+    //           difference: currentPrice - previousPrice,
+    //         },
+    //       ];
+    //     });
+
+    //     res.send(comparison);
+    //   } catch (error) {
+    //     console.error("Error fetching price history:", error);
+    //     res.status(500).json({ message: "Internal Server Error" });
+    //   }
+    // });
+
+    // app.get("/price-history/:id", verifyFirebaseToken, async (req, res) => {
+    //   try {
+    //     const id = req.params.id;
+    //     const compareDate = req.query.compareDate;
+
+    //     const product = await productsCollection.findOne({
+    //       _id: new ObjectId(id),
+    //     });
+
+    //     if (!product) {
+    //       return res.status(404).json({ message: "Product not found" });
+    //     }
+
+    //     const currentPrice = parseFloat(product.pricePerUnit);
+
+    //     // compareDate
+    //     const previousEntry = product.prices?.find(
+    //       (p) => p.date === compareDate
+    //     );
+    //     const previousPrice = previousEntry
+    //       ? parseFloat(previousEntry.price)
+    //       : 0;
+
+    //     const difference = parseFloat(
+    //       (currentPrice - previousPrice).toFixed(2)
+    //     );
+
+    //     const chartData = [
+    //       {
+    //         name: product.itemName || "Item",
+    //         current: currentPrice,
+    //         previous: previousPrice,
+    //         difference: difference,
+    //       },
+    //     ];
+
+    //     res.send(chartData);
+    //   } catch (err) {
+    //     console.error(err);
+    //     res.status(500).json({ message: "Something went wrong" });
+    //   }
+    // });
+
+    // GET /price-history/:id?compareDate=YYYY-MM-DD
+    app.get("/price-history/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const compareDate = req.query.compareDate;
+
+        const product = await productsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!product) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        const currentPrice = parseFloat(product.pricePerUnit);
+        const itemName = product.itemName || "Item";
+
+        if (!compareDate) {
+          // Only current price
+          return res.send([
+            {
+              name: itemName,
+              current: currentPrice,
+            },
+          ]);
+        }
+
+        const previousEntry = product.prices?.find(
+          (p) => p.date === compareDate
+        );
+        const previousPrice = previousEntry
+          ? parseFloat(previousEntry.price)
+          : 0;
+
+        const difference = parseFloat(
+          (currentPrice - previousPrice).toFixed(2)
+        );
+
+        const chartData = [
+          {
+            name: itemName,
+            current: currentPrice,
+            previous: previousPrice,
+            difference: difference,
+          },
+        ];
+
+        res.send(chartData);
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // reviewsCollection CRUD
+
+    app.get("/reviews/:productId", async (req, res) => {
+      try {
+        const productId = req.params.productId;
+
+        const reviews = await reviewsCollection
+          .find({ productId })
+          .sort({ date: -1 })
+          .toArray();
+
+        res.send(reviews);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch reviews", error });
+      }
+    });
+
+    app.post("/reviews", verifyFirebaseToken, async (req, res) => {
+      try {
+        const review = req.body;
+
+        if (
+          !review.productId ||
+          !review.name ||
+          !review.email ||
+          !review.comment ||
+          !review.rating
+        ) {
+          return res.status(400).json({ message: "All fields are required" });
+        }
+        const result = await reviewsCollection.insertOne(review);
+        res.send(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to post review", error });
+      }
     });
 
     // Connect the client to the server	(optional starting in v4.7)
