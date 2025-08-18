@@ -930,6 +930,63 @@ async function run() {
       }
     });
 
+    // compareData
+
+    app.get("/price-history/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { compareDate } = req.query;
+        let query = { productId: id };
+        if (compareDate) {
+          query.price = { $gte: compareDate };
+        }
+
+        const result = await req.db
+          .collection("priceHistory")
+          .find(query)
+          .sort({ date: 1 })
+          .toArray();
+
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching price history:", error);
+        res.status(500).json({ error: "Failed to fetch price history" });
+      }
+    });
+
+    // Example: GET /dashboard-stats?role=vendor&email=xyz
+    app.get("/dashboard-stats", async (req, res) => {
+      const { role, email } = req.query;
+
+      if (role === "user") {
+        // User-specific stats
+        const orders = await Order.countDocuments({ userEmail: email });
+        const watchlist = await Watchlist.countDocuments({ userEmail: email });
+        res.json({ orders, watchlist });
+      }
+
+      if (role === "vendor") {
+        // Vendor-specific stats
+        const products = await Product.find({ vendorEmail: email });
+        const totalProducts = products.length;
+        const totalRevenue = products.reduce((acc, p) => {
+          const latestPrice = p.prices[p.prices.length - 1]?.price || 0;
+          return acc + latestPrice;
+        }, 0);
+
+        res.json({ totalProducts, totalRevenue });
+      }
+
+      if (role === "admin") {
+        // Admin-specific stats
+        const users = await usersCollection.countDocuments();
+        const products = await productsCollection.countDocuments();
+        const advertisement = await advertisementsCollection.countDocuments();
+        const orders = await buyCollection.countDocuments();
+        res.send([{ users, products, advertisement, orders }]);
+      }
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
