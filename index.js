@@ -146,6 +146,21 @@ async function run() {
       }
     );
 
+    // GET /products/home-products
+    app.get("/products/home-products", async (req, res) => {
+      try {
+        const result = await productsCollection
+          .find({ status: "approved" })
+          .sort({ date: -1 })
+          .limit(6)
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch products", error });
+      }
+    });
+
     app.post(
       "/products",
       verifyFirebaseToken,
@@ -164,13 +179,54 @@ async function run() {
     );
     app.patch("/products/:id", async (req, res) => {
       const id = req.params.id;
-      const updatedData = req.body;
+      const { newPrice, ...otherUpdates } = req.body;
 
-      const result = await productsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedData }
-      );
-      res.send(result);
+      const today = otherUpdates.date;
+
+      try {
+        // Step 1: Find the existing product
+        const product = await productsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!product) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        // Step 2: Check if today's date already exists in prices[]
+        const isDateExists = product.prices?.some(
+          (entry) => entry.date === today
+        );
+
+        // Step 3: Prepare update operations
+        const updateOps = {
+          $set: {
+            ...otherUpdates,
+            pricePerUnit: newPrice,
+          },
+        };
+
+        // Step 4: Only push new price if today's date doesn't exist
+        if (!isDateExists) {
+          updateOps.$push = {
+            prices: {
+              date: today,
+              price: parseFloat(newPrice),
+            },
+          };
+        }
+
+        // Step 5: Update in DB
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updateOps
+        );
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to update product" });
+      }
     });
 
     app.delete(
@@ -771,6 +827,106 @@ async function run() {
         res.send({ insertedId: result.insertedId });
       } catch (err) {
         res.status(500).send({ message: "Failed to record purchase" });
+      }
+    });
+
+    // GET all orders for a specific user
+    app.get("/orders/:email", verifyFirebaseToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const orders = await buyCollection
+          .find({ userEmail: email })
+          .sort({
+            buyDate: -1,
+          })
+          .toArray();
+
+        res.send(orders);
+      } catch (error) {
+        console.error("Failed to fetch orders:", error.message);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // ✅ GET all orders - Only for admin
+    app.get("/orders", verifyFirebaseToken, verifyAdmin, async (req, res) => {
+      try {
+        const allOrders = await buyCollection
+          .find()
+          .sort({ buyDate: -1 })
+          .toArray();
+        res.send(allOrders);
+      } catch (error) {
+        res
+          .status(500)
+          .json({ message: "Failed to fetch orders", error: error.message });
+      }
+    });
+
+    // Express route for getting all price trend data
+    app.get("/api/price-trends", async (req, res) => {
+      try {
+        const result = await productsCollection
+          .find({ status: "approved" })
+          .toArray();
+
+        // format the data for frontend chart
+        const formatted = result.map((product) => ({
+          _id: product._id,
+          itemName: product.itemName,
+          marketName: product.marketName,
+          productImage: product.productImage,
+          prices: product.prices.map((p) => ({
+            date: p.date,
+            price: parseFloat(p.price),
+          })),
+        }));
+
+        res.send(formatted);
+      } catch (err) {
+        res.status(500).json({ message: "Failed to fetch price trends" });
+      }
+    });
+
+    // get highest rating product
+
+    // Best Sellers API (highest rating top 3)
+    // Backend route
+    app.get("/api/products/best-sellers", async (req, res) => {
+      try {
+        // Step 1: Top 3 highest rated reviews
+        const topReviews = await reviewsCollection
+          .find()
+          .sort({ rating: -1 }) // rating descending
+          .limit(3)
+          .toArray();
+
+        // Step 2: Map productIds
+        const productIds = topReviews.map((review) => review.productId);
+        // console.log(productIds);
+        // Step 3: Fetch product info from productsCollection
+        const products = await productsCollection
+          .find({ _id: { $in: productIds.map((id) => new ObjectId(id)) } })
+          .toArray();
+
+        // Step 4: Combine product info + rating (optional)
+        const bestSellers = products.map((product) => {
+          const review = topReviews.find(
+            (r) => r.productId === product._id.toString()
+          );
+          return {
+            ...product,
+            rating: review?.rating
+              ? parseInt(review.rating.$numberInt || review.rating)
+              : null,
+          };
+        });
+
+        res.send(bestSellers);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
       }
     });
 

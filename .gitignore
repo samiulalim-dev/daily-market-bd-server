@@ -1,2 +1,4 @@
 node_modules
 .env
+.vercel
+daily-market-bd-fb-token.json
