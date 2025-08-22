@@ -960,9 +960,14 @@ async function run() {
 
       if (role === "user") {
         // User-specific stats
-        const orders = await Order.countDocuments({ userEmail: email });
-        const watchlist = await Watchlist.countDocuments({ userEmail: email });
-        res.json({ orders, watchlist });
+        const orders = await buyCollection.countDocuments({ userEmail: email });
+        const watchlist = await watchlistCollection.countDocuments({
+          userEmail: email,
+        });
+        const review = await reviewsCollection.countDocuments({
+          email: email,
+        });
+        res.send([{ orders, watchlist, review }]);
       }
 
       if (role === "vendor") {
