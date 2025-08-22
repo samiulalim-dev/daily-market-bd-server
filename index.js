@@ -967,23 +967,34 @@ async function run() {
 
       if (role === "vendor") {
         // Vendor-specific stats
-        const products = await Product.find({ vendorEmail: email });
+        const products = await buyCollection
+          .find({ "product.vendorEmail": email })
+          .toArray();
+        const advertise = await advertisementsCollection
+          .find({ vendorEmail: email })
+          .toArray();
+        const totalAdvertisements = advertise.length;
         const totalProducts = products.length;
         const totalRevenue = products.reduce((acc, p) => {
-          const latestPrice = p.prices[p.prices.length - 1]?.price || 0;
-          return acc + latestPrice;
-        }, 0);
+          const prices = p.product?.prices; // optional chaining
+          if (!prices || prices.length === 0) {
+            return acc;
+          }
 
-        res.json({ totalProducts, totalRevenue });
+          const latestPrice = prices[prices.length - 1]?.price || 0;
+          return acc + Number(latestPrice);
+        }, 0);
+        res.send([{ totalProducts, totalRevenue, totalAdvertisements }]);
       }
 
       if (role === "admin") {
         // Admin-specific stats
         const users = await usersCollection.countDocuments();
         const products = await productsCollection.countDocuments();
-        const advertisement = await advertisementsCollection.countDocuments();
+        const ads = await advertisementsCollection.countDocuments();
         const orders = await buyCollection.countDocuments();
-        res.send([{ users, products, advertisement, orders }]);
+        const watchList = await watchlistCollection.countDocuments();
+        res.send([{ users, products, ads, orders, watchList }]);
       }
     });
 
